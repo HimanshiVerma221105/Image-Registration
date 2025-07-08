@@ -8,6 +8,10 @@ import requests
 from PIL import Image
 import io
 import uuid
+from scipy.ndimage import gaussian_filter   
+from scipy.spatial.distance import cdist
+
+
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -266,9 +270,194 @@ def load_image_from_path(path):
         raise ValueError(f"Could not load image from {path}")
     return img
 
+# --- Registration functions ---
+def register_orb(img_ref_color, img_mov_color):
+    img_ref_gray = cv2.cvtColor(img_ref_color, cv2.COLOR_BGR2GRAY)
+    img_mov_gray = cv2.cvtColor(img_mov_color, cv2.COLOR_BGR2GRAY)
+
+    fast = cv2.FastFeatureDetector_create(threshold=25, nonmaxSuppression=True)
+    kp_ref_cv = fast.detect(img_ref_gray, None)
+    kp_mov_cv = fast.detect(img_mov_gray, None)
+
+    if len(kp_ref_cv) == 0 or len(kp_mov_cv) == 0:
+        raise ValueError("No keypoints detected.")
+
+    brief = cv2.xfeatures2d.BriefDescriptorExtractor_create(bytes=32)
+    kp_ref_cv, desc_ref = brief.compute(img_ref_gray, kp_ref_cv)
+    kp_mov_cv, desc_mov = brief.compute(img_mov_gray, kp_mov_cv)
+
+    if desc_ref is None or desc_mov is None:
+        raise ValueError("Could not compute BRIEF descriptors.")
+
+    pts_ref = np.array([kp.pt for kp in kp_ref_cv], dtype=np.float32)
+    pts_mov = np.array([kp.pt for kp in kp_mov_cv], dtype=np.float32)
+
+    def match_descriptors(desc1, desc2):
+        D = cdist(desc1, desc2, metric='hamming')
+        return np.argmin(D, axis=1)
+
+    matches = match_descriptors(desc_ref, desc_mov)
+    if matches.size == 0:
+        raise ValueError("No matches found")
+
+    src = pts_mov[matches]
+    dst = pts_ref
+
+    def ransac_homography(src_pts, dst_pts, threshold=5.0, max_iter=1000):
+        best_H = None
+        best_inliers = np.zeros(len(src_pts), dtype=bool)
+        n = len(src_pts)
+        for _ in range(max_iter):
+            if n < 4:
+                break
+            idx = np.random.choice(n, 4, replace=False)
+            src_s = src_pts[idx]
+            dst_s = dst_pts[idx]
+            H, _ = cv2.findHomography(src_s, dst_s, 0)
+            if H is None:
+                continue
+            src32 = src_pts.astype(np.float32).reshape(-1, 1, 2)
+            proj = cv2.perspectiveTransform(src32, H).reshape(-1, 2)
+            errs = np.linalg.norm(dst_pts - proj, axis=1)
+            inliers = errs < threshold
+            if inliers.sum() > best_inliers.sum():
+                best_inliers = inliers
+                best_H = H
+        return best_H, best_inliers
+
+    H, inliers = ransac_homography(src, dst)
+    if H is None:
+        raise ValueError("RANSAC failed to find a homography")
+
+    aligned = cv2.warpPerspective(img_mov_color, H, (img_ref_color.shape[1], img_ref_color.shape[0]))
+    return aligned
+
+def harris_corners(img, window_size=3, k=0.04, threshold=1e-5, max_pts=500):
+    Ix = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)  #(source, depth, dx, dy, kernelsize)
+    Iy = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+
+    Ixx = gaussian_filter(Ix * Ix, sigma=1)  #ntensity of gradient in x-direction (squared)
+    Iyy = gaussian_filter(Iy * Iy, sigma=1)
+    Ixy = gaussian_filter(Ix * Iy, sigma=1)  #product of gradients (for cross-terms)
+
+    height, width, _ = img.shape
+    R = np.zeros((height, width))
+
+    offset = window_size // 2
+    for y in range(offset, height - offset):
+        for x in range(offset, width - offset):
+            Sxx = Ixx[y - offset:y + offset + 1, x - offset:x + offset + 1].sum()
+            Syy = Iyy[y - offset:y + offset + 1, x - offset:x + offset + 1].sum()
+            Sxy = Ixy[y - offset:y + offset + 1, x - offset:x + offset + 1].sum()
+
+            det = Sxx * Syy - Sxy * Sxy
+            trace = Sxx + Syy
+            R[y, x] = det - k * trace * trace
+
+    R[R < threshold * R.max()] = 0   #harris Corner response formula
+    keypoints = np.argwhere(R)
+    if len(keypoints) > max_pts:
+        idx = np.argsort(R[tuple(keypoints.T)])[::-1][:max_pts]
+        keypoints = keypoints[idx]
+    return keypoints
+
+def extract_descriptors(img, keypoints, patch_size=8):
+    descriptors = []
+    valid_kps = []
+    half = patch_size // 2
+    for y, x in keypoints:
+        if y - half < 0 or y + half >= img.shape[0] or x - half < 0 or x + half >= img.shape[1]:
+            continue
+        patch = img[y - half:y + half, x - half:x + half].astype(np.float32)
+        patch = patch - np.mean(patch)
+        norm = np.linalg.norm(patch)
+        if norm != 0:
+            patch = patch / norm
+        descriptors.append(patch.flatten())
+        valid_kps.append((x, y))
+    return np.array(descriptors), np.array(valid_kps)
+
+def match_descriptors(desc1, desc2):
+    if len(desc1) == 0 or len(desc2) == 0:
+        return []
+    distances = cdist(desc1, desc2, metric='euclidean')
+    matches = np.argmin(distances, axis=1)
+    return matches
+
+def ransac_homography(src_pts, dst_pts, threshold=5.0, max_iter=1000):
+    np.random.seed(42)  # 🔒 Fix the randomness so results are stable
+    
+    best_H = None
+    best_inliers = np.zeros(len(src_pts), dtype=bool)
+    n = len(src_pts)
+
+    for _ in range(max_iter):
+        if n < 4:
+            break
+        idx = np.random.choice(n, 4, replace=False)
+        src_s = src_pts[idx]
+        dst_s = dst_pts[idx]
+
+        H, _ = cv2.findHomography(src_s, dst_s, 0)
+        if H is None:
+            continue
+
+        src32 = src_pts.astype(np.float32).reshape(-1, 1, 2)
+        proj = cv2.perspectiveTransform(src32, H).reshape(-1, 2)
+        errs = np.linalg.norm(dst_pts - proj, axis=1)
+        inliers = errs < threshold
+
+        if inliers.sum() > best_inliers.sum():
+            best_inliers = inliers
+            best_H = H
+
+    return best_H, best_inliers
+
+
+def register_sift(img_ref_color, img_mov_color):
+    # Convert to grayscale for detection
+    gray_ref = cv2.cvtColor(img_ref_color, cv2.COLOR_BGR2GRAY)
+    gray_mov = cv2.cvtColor(img_mov_color, cv2.COLOR_BGR2GRAY)
+
+    kp1 = harris_corners(gray_ref)
+    kp2 = harris_corners(gray_mov)
+
+    desc1, kp1 = extract_descriptors(gray_ref, kp1)
+    desc2, kp2 = extract_descriptors(gray_mov, kp2)
+
+    matches = match_descriptors(desc1, desc2)
+    if len(matches) == 0:
+        raise ValueError("No matches found.")
+
+    src_pts = kp2[matches]
+    dst_pts = kp1
+
+    H, inliers = ransac_homography(np.float32(src_pts), np.float32(dst_pts))
+    if H is None:
+        raise ValueError("Homography estimation failed.")
+
+    # Warp the color moving image (NOT grayscale)
+    aligned = cv2.warpPerspective(img_mov_color, H, (img_ref_color.shape[1], img_ref_color.shape[0]))
+    return aligned
+
+# ===== ROUTES =====
+
 @app.route('/')
-def index():
+def home():
+    """Main page - serves home.html"""
+    return render_template('home.html')
+
+@app.route('/resize')
+def resize_page():
+    """Resize page - serves index.html for image resizing functionality"""
     return render_template('index.html')
+
+@app.route('/register')
+def register_page():
+    """Registration page - serves register.html for image registration functionality"""
+    return render_template('register.html')
+
+# ===== API ENDPOINTS =====
 
 @app.route('/upload', methods=['POST'])
 def upload_image():
@@ -319,8 +508,9 @@ def upload_image():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/resize', methods=['POST'])
+@app.route('/resize_image', methods=['POST'])
 def resize_image():
+    """API endpoint for image resizing - renamed from /resize to avoid conflict"""
     try:
         data = request.json
         
@@ -362,6 +552,35 @@ def resize_image():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/register_image', methods=['POST'])
+def register_image():
+    """API endpoint for image registration"""
+    try:
+        data = request.json
+        ref_data = data['ref']
+        mov_data = data['mov']
+        method = data['method']
+
+        # Decode base64 images
+        ref_img = cv2.imdecode(np.frombuffer(base64.b64decode(ref_data.split(',')[1]), np.uint8), cv2.IMREAD_COLOR)
+        mov_img = cv2.imdecode(np.frombuffer(base64.b64decode(mov_data.split(',')[1]), np.uint8), cv2.IMREAD_COLOR)
+        if ref_img is None or mov_img is None:
+            return jsonify({'success': False, 'error': 'Could not decode images.'})
+
+        if method == 'orb':
+            result = register_orb(ref_img, mov_img)
+        elif method == 'sift':
+            result = register_sift(ref_img, mov_img)
+        else:
+            return jsonify({'success': False, 'error': 'Invalid method.'})
+
+        # Encode result to base64
+        _, buf = cv2.imencode('.jpg', result)
+        result_b64 = 'data:image/jpeg;base64,' + base64.b64encode(buf).decode('utf-8')
+        return jsonify({'success': True, 'result': result_b64})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/save', methods=['POST'])
 def save_image():
     try:
@@ -397,4 +616,5 @@ def download_file(filename):
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0')
+

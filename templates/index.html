@@ -376,7 +376,7 @@
                     </div>
                 </div>
                 <div style="text-align: center;">
-                    <button class="resize-btn" onclick="resizeImage()">🔄 Resize Image</button>
+                    <button class="resize-btn" onclick="resizeImage()">Resize Image</button>
                 </div>
             </div>
 
@@ -397,7 +397,7 @@
                 </div>
                 <div style="text-align: center;">
                     <button class="save-btn" onclick="saveImage()">💾 Save to Server</button>
-                    <button class="download-btn hidden" onclick="downloadImage()" id="downloadBtn">📥 Download</button>
+                    <button class="download-btn hidden" onclick="downloadImage()" id="downloadBtn">Download</button>
                 </div>
             </div>
 
@@ -421,7 +421,7 @@
 
         // Drag and drop handlers
         const uploadArea = document.getElementById('uploadArea');
-
+        
         uploadArea.addEventListener('dragover', function (e) {
             e.preventDefault();
             uploadArea.classList.add('dragover');
@@ -600,7 +600,7 @@
 
             showLoading(true);
 
-            fetch('/resize', {
+            fetch('/resize_image', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

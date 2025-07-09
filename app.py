@@ -12,7 +12,6 @@ from scipy.ndimage import gaussian_filter
 from scipy.spatial.distance import cdist
 
 
-
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['OUTPUT_FOLDER'] = 'outputs'
@@ -270,6 +269,36 @@ def load_image_from_path(path):
         raise ValueError(f"Could not load image from {path}")
     return img
 
+def ransac_homography(src_pts, dst_pts, threshold=5.0, max_iter=1000):
+    np.random.seed(14)  # 🔒 Fix the randomness so results are stable
+    
+    best_H = None
+    best_inliers = np.zeros(len(src_pts), dtype=bool)
+    n = len(src_pts)
+
+    for _ in range(max_iter):
+        if n < 4:
+            break
+        idx = np.random.choice(n, 4, replace=False)
+        src_s = src_pts[idx]
+        dst_s = dst_pts[idx]
+
+        H, _ = cv2.findHomography(src_s, dst_s, 0)
+        if H is None:
+            continue
+
+        src32 = src_pts.astype(np.float32).reshape(-1, 1, 2)
+        proj = cv2.perspectiveTransform(src32, H).reshape(-1, 2)
+        errs = np.linalg.norm(dst_pts - proj, axis=1)
+        inliers = errs < threshold
+
+        if inliers.sum() > best_inliers.sum():
+            best_inliers = inliers
+            best_H = H
+
+    return best_H, best_inliers
+
+
 # --- Registration functions ---
 def register_orb(img_ref_color, img_mov_color):
     img_ref_gray = cv2.cvtColor(img_ref_color, cv2.COLOR_BGR2GRAY)
@@ -302,28 +331,6 @@ def register_orb(img_ref_color, img_mov_color):
 
     src = pts_mov[matches]
     dst = pts_ref
-
-    def ransac_homography(src_pts, dst_pts, threshold=5.0, max_iter=1000):
-        best_H = None
-        best_inliers = np.zeros(len(src_pts), dtype=bool)
-        n = len(src_pts)
-        for _ in range(max_iter):
-            if n < 4:
-                break
-            idx = np.random.choice(n, 4, replace=False)
-            src_s = src_pts[idx]
-            dst_s = dst_pts[idx]
-            H, _ = cv2.findHomography(src_s, dst_s, 0)
-            if H is None:
-                continue
-            src32 = src_pts.astype(np.float32).reshape(-1, 1, 2)
-            proj = cv2.perspectiveTransform(src32, H).reshape(-1, 2)
-            errs = np.linalg.norm(dst_pts - proj, axis=1)
-            inliers = errs < threshold
-            if inliers.sum() > best_inliers.sum():
-                best_inliers = inliers
-                best_H = H
-        return best_H, best_inliers
 
     H, inliers = ransac_homography(src, dst)
     if H is None:
@@ -384,46 +391,17 @@ def match_descriptors(desc1, desc2):
     matches = np.argmin(distances, axis=1)
     return matches
 
-def ransac_homography(src_pts, dst_pts, threshold=5.0, max_iter=1000):
-    np.random.seed(42)  # 🔒 Fix the randomness so results are stable
-    
-    best_H = None
-    best_inliers = np.zeros(len(src_pts), dtype=bool)
-    n = len(src_pts)
 
-    for _ in range(max_iter):
-        if n < 4:
-            break
-        idx = np.random.choice(n, 4, replace=False)
-        src_s = src_pts[idx]
-        dst_s = dst_pts[idx]
-
-        H, _ = cv2.findHomography(src_s, dst_s, 0)
-        if H is None:
-            continue
-
-        src32 = src_pts.astype(np.float32).reshape(-1, 1, 2)
-        proj = cv2.perspectiveTransform(src32, H).reshape(-1, 2)
-        errs = np.linalg.norm(dst_pts - proj, axis=1)
-        inliers = errs < threshold
-
-        if inliers.sum() > best_inliers.sum():
-            best_inliers = inliers
-            best_H = H
-
-    return best_H, best_inliers
-
-
-def register_sift(img_ref_color, img_mov_color):
+def register_sift(img_ref, img_mov):
     # Convert to grayscale for detection
-    gray_ref = cv2.cvtColor(img_ref_color, cv2.COLOR_BGR2GRAY)
-    gray_mov = cv2.cvtColor(img_mov_color, cv2.COLOR_BGR2GRAY)
+    # gray_ref = cv2.cvtColor(img_ref_color, cv2.COLOR_BGR2GRAY)
+    # gray_mov = cv2.cvtColor(img_mov_color, cv2.COLOR_BGR2GRAY)
 
-    kp1 = harris_corners(gray_ref)
-    kp2 = harris_corners(gray_mov)
+    kp1 = harris_corners(img_ref)
+    kp2 = harris_corners(img_mov)
 
-    desc1, kp1 = extract_descriptors(gray_ref, kp1)
-    desc2, kp2 = extract_descriptors(gray_mov, kp2)
+    desc1, kp1 = extract_descriptors(img_ref, kp1)
+    desc2, kp2 = extract_descriptors(img_mov, kp2)
 
     matches = match_descriptors(desc1, desc2)
     if len(matches) == 0:
@@ -437,8 +415,9 @@ def register_sift(img_ref_color, img_mov_color):
         raise ValueError("Homography estimation failed.")
 
     # Warp the color moving image (NOT grayscale)
-    aligned = cv2.warpPerspective(img_mov_color, H, (img_ref_color.shape[1], img_ref_color.shape[0]))
+    aligned = cv2.warpPerspective(img_mov, H, (img_ref.shape[1], img_ref.shape[0]))
     return aligned
+
 
 # ===== ROUTES =====
 
@@ -459,44 +438,57 @@ def register_page():
 
 # ===== API ENDPOINTS =====
 
+from PIL import UnidentifiedImageError
+
 @app.route('/upload', methods=['POST'])
 def upload_image():
     try:
         image = None
         filename = None
-        
+
         if 'file' in request.files and request.files['file'].filename:
-            # Handle file upload
             file = request.files['file']
             if file.filename == '':
                 return jsonify({'error': 'No file selected'}), 400
-            
+
             filename = secure_filename(file.filename)
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-            image = cv2.imread(filepath)
-            
+
+            ext = os.path.splitext(filename)[1].lower()
+            if ext in ['.ppm', '.pgm', '.pbm']:
+                try:
+                    pil_img = Image.open(filepath).convert("RGB")  # Convert to RGB
+                    buffer = io.BytesIO()
+                    pil_img.save(buffer, format='PNG')  # Save as PNG in memory
+                    buffer.seek(0)
+                    image = cv2.imdecode(np.frombuffer(buffer.read(), np.uint8), cv2.IMREAD_COLOR)
+                except Exception as e:
+                   return jsonify({'error': f'Failed to load PPM/PGM/PBM image: {str(e)}'}), 400
+
+            else:
+                image = cv2.imread(filepath)
+
+
         elif 'url' in request.form and request.form['url']:
-            # Handle URL
             url = request.form['url']
             image = load_image_from_url(url)
             filename = f"url_image_{uuid.uuid4().hex[:8]}.jpg"
-            
+
         elif 'path' in request.form and request.form['path']:
-            # Handle local path
             path = request.form['path']
             image = load_image_from_path(path)
             filename = os.path.basename(path)
-            
+
         else:
             return jsonify({'error': 'No image source provided'}), 400
-        
+
         if image is None:
             return jsonify({'error': 'Failed to load image'}), 400
-        
+
         h, w = image.shape[:2]
         img_base64 = image_to_base64(image)
-        
+
         return jsonify({
             'success': True,
             'image': img_base64,
@@ -504,7 +496,7 @@ def upload_image():
             'height': h,
             'filename': filename
         })
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

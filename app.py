@@ -11,11 +11,10 @@ import uuid
 from scipy.ndimage import gaussian_filter   
 from scipy.spatial.distance import cdist
 
-
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['OUTPUT_FOLDER'] = 'outputs'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  
 
 # Create folders if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -270,7 +269,7 @@ def load_image_from_path(path):
     return img
 
 def ransac_homography(src_pts, dst_pts, threshold=5.0, max_iter=1000):
-    np.random.seed(14)  # 🔒 Fix the randomness so results are stable
+    np.random.seed(14) 
     
     best_H = None
     best_inliers = np.zeros(len(src_pts), dtype=bool)
@@ -418,6 +417,106 @@ def register_sift(img_ref, img_mov):
     aligned = cv2.warpPerspective(img_mov, H, (img_ref.shape[1], img_ref.shape[0]))
     return aligned
 
+@app.route('/stitch', methods=['POST'])
+def stitch_image():
+    try:
+        data = request.json
+        img1 = cv2.imdecode(np.frombuffer(base64.b64decode(data['img1'].split(',')[1]), np.uint8), cv2.IMREAD_COLOR)
+        img2 = cv2.imdecode(np.frombuffer(base64.b64decode(data['img2'].split(',')[1]), np.uint8), cv2.IMREAD_COLOR)
+        direction = data.get('direction', 'horizontal')
+
+        # Convert to grayscale
+        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+        # Detect features and compute descriptors
+        sift = cv2.SIFT_create()
+        kp1, des1 = sift.detectAndCompute(gray1, None)
+        kp2, des2 = sift.detectAndCompute(gray2, None)
+
+        # Match features using Lowe's ratio test
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(des1, des2, k=2)
+        good = [m for m, n in matches if m.distance < 0.75 * n.distance]
+
+        if len(good) < 4:
+            return jsonify({'success': False, 'error': 'Not enough good matches for stitching.'})
+
+        pts1 = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+        pts2 = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+
+        H, _ = cv2.findHomography(pts2, pts1, cv2.RANSAC)
+
+        h1, w1 = img1.shape[:2]
+        h2, w2 = img2.shape[:2]
+
+        if direction == "vertical":
+            corners = np.float32([[0, 0], [0, h2], [w2, h2], [w2, 0]]).reshape(-1, 1, 2)
+        else:
+            corners = np.float32([[0, 0], [0, h2], [w2, h2], [w2, 0]]).reshape(-1, 1, 2)
+
+        warped_corners = cv2.perspectiveTransform(corners, H)
+        all_corners = np.concatenate((warped_corners, np.float32([[0, 0], [0, h1], [w1, h1], [w1, 0]]).reshape(-1, 1, 2)), axis=0)
+        [xmin, ymin] = np.int32(all_corners.min(axis=0).ravel() - 0.5)
+        [xmax, ymax] = np.int32(all_corners.max(axis=0).ravel() + 0.5)
+
+        T = np.array([[1, 0, -xmin], [0, 1, -ymin], [0, 0, 1]])
+
+        stitched = cv2.warpPerspective(img2, T @ H, (xmax - xmin, ymax - ymin))
+        stitched[-ymin:h1 - ymin, -xmin:w1 - xmin] = img1
+
+        # Crop black borders
+        gray = cv2.cvtColor(stitched, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
+        x, y, w, h = cv2.boundingRect(thresh)
+        cropped = stitched[y:y+h, x:x+w]
+
+        result_b64 = image_to_base64(cropped)
+        return jsonify({'success': True, 'result': result_b64})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# Add these functions after your existing registration functions
+
+def calculate_mse(img1, img2):
+    """Calculate Mean Squared Error between two images"""
+    return np.mean((img1.astype(np.float32) - img2.astype(np.float32)) ** 2)
+
+def calculate_psnr(img1, img2):
+    """Calculate Peak Signal-to-Noise Ratio"""
+    mse = calculate_mse(img1, img2)
+    if mse == 0:
+        return float('inf')
+    return 20 * np.log10(255.0 / np.sqrt(mse))
+
+def calculate_ssim(img1, img2):
+    """Calculate Structural Similarity Index"""
+    # Convert to grayscale if needed
+    if len(img1.shape) == 3:
+        img1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+        img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    else:
+        img1_gray, img2_gray = img1, img2
+    
+    # Simple SSIM implementation
+    mu1 = cv2.GaussianBlur(img1_gray, (11, 11), 1.5)
+    mu2 = cv2.GaussianBlur(img2_gray, (11, 11), 1.5)
+    
+    mu1_sq = mu1 ** 2
+    mu2_sq = mu2 ** 2
+    mu1_mu2 = mu1 * mu2
+    
+    sigma1_sq = cv2.GaussianBlur(img1_gray ** 2, (11, 11), 1.5) - mu1_sq
+    sigma2_sq = cv2.GaussianBlur(img2_gray ** 2, (11, 11), 1.5) - mu2_sq
+    sigma12 = cv2.GaussianBlur(img1_gray * img2_gray, (11, 11), 1.5) - mu1_mu2
+    
+    c1 = (0.01 * 255) ** 2
+    c2 = (0.03 * 255) ** 2
+    
+    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
+    return np.mean(ssim_map)
 
 # ===== ROUTES =====
 
@@ -566,12 +665,22 @@ def register_image():
         else:
             return jsonify({'success': False, 'error': 'Invalid method.'})
 
+        metrics = {
+             'mse': float(calculate_mse(ref_img, result)),
+             'psnr': float(calculate_psnr(ref_img, result)),
+             'ssim': float(calculate_ssim(ref_img, result))
+          }
         # Encode result to base64
         _, buf = cv2.imencode('.jpg', result)
         result_b64 = 'data:image/jpeg;base64,' + base64.b64encode(buf).decode('utf-8')
-        return jsonify({'success': True, 'result': result_b64})
+        return jsonify({'success': True, 'result': result_b64, 'metrics': metrics})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/stitch')
+def stitch_page():
+    return render_template('stitch.html')
+
 
 @app.route('/save', methods=['POST'])
 def save_image():
@@ -609,4 +718,3 @@ def download_file(filename):
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
-

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Image Stitching</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      border-radius: 15px;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h2 {
+      font-size: 2em;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    label {
+      display: block;
+      margin: 20px 0 8px;
+      font-weight: bold;
+      color: #495057;
+    }
+
+    input[type="file"],
+    select {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 2px solid #dee2e6;
+      font-size: 16px;
+    }
+
+    button {
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 25px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.3s ease;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+    }
+
+    #result {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    #result h3 {
+      color: #495057;
+      margin-bottom: 20px;
+    }
+
+    #stitchedImage {
+      max-width: 90%;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>🧵 Image Stitching</h2>
+    </div>
+
+    <form id="stitchForm">
+      <label>First Image (Left/Top):</label>
+      <input type="file" id="img1" accept="image/*">
+
+      <label>Second Image (Right/Bottom):</label>
+      <input type="file" id="img2" accept="image/*">
+
+      <label>Stitch Direction:</label>
+      <select id="direction">
+        <option value="horizontal">Left-Right</option>
+        <option value="vertical">Top-Bottom</option>
+      </select>
+
+      <button type="button" onclick="submitStitch()">Stitch Images</button>
+    </form>
+
+    <div id="result">
+      <h3>Stitched Output Will Appear Below:</h3>
+      <img id="stitchedImage" src="">
+    </div>
+  </div>
+
+  <script>
+    function toBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject("Failed to read image");
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function submitStitch() {
+      const file1 = document.getElementById("img1").files[0];
+      const file2 = document.getElementById("img2").files[0];
+      const direction = document.getElementById("direction").value;
+      const stitchedImg = document.getElementById("stitchedImage");
+
+      if (!file1 || !file2) {
+        alert("Please select both images.");
+        return;
+      }
+
+      const img1 = await toBase64(file1);
+      const img2 = await toBase64(file2);
+
+      fetch("/stitch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          img1: img1,
+          img2: img2,
+          direction: direction
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          stitchedImg.src = data.result;
+          stitchedImg.style.display = "block";
+        } else {
+          alert("Stitching failed: " + data.error);
+        }
+      })
+      .catch(err => {
+        console.error("Error:", err);
+        alert("Unexpected error occurred.");
+      });
+    }
+  </script>
+</body>
+</html>

@@ -304,14 +304,14 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🖼️ Image Resizer</h1>
+            <h1>Image Resizer</h1>
             <p>Upload, resize, and download your images with various interpolation methods</p>
         </div>
 
         <div class="content">
             <!-- Upload Section -->
             <div class="section">
-                <h2>📤 Upload Image</h2>
+                <h2>Upload Image</h2>
                 <div class="upload-area" id="uploadArea">
                     <div>
                         <p>Drag and drop an image here or</p>
@@ -339,7 +339,7 @@
 
             <!-- Original Image Display -->
             <div class="section hidden" id="originalSection">
-                <h2>📷 Original Image</h2>
+                <h2>Original Image</h2>
                 <div class="image-display">
                     <div class="image-container">
                         <img id="originalImage" class="original-image" alt="Original Image">
@@ -350,7 +350,7 @@
 
             <!-- Resize Controls -->
             <div class="section hidden" id="controlsSection">
-                <h2>⚙️ Resize Settings</h2>
+                <h2>Resize Settings</h2>
                 <div class="controls">
                     <div class="control-group">
                         <label for="newWidth">New Width:</label>
@@ -388,7 +388,7 @@
 
             <!-- Resized Image Display -->
             <div class="section hidden" id="resizedSection">
-                <h2>✨ Resized Image</h2>
+                <h2>Resized Image</h2>
                 <div class="image-display">
                     <div class="image-container">
                         <img id="resizedImage" alt="Resized Image">
@@ -396,8 +396,8 @@
                     </div>
                 </div>
                 <div style="text-align: center;">
-                    <button class="save-btn" onclick="saveImage()">💾 Save to Server</button>
-                    <button class="download-btn hidden" onclick="downloadImage()" id="downloadBtn">Download</button>
+                    <!-- <button class="save-btn" onclick="saveImage()">Save to Server</button> -->
+                    <button class="download-btn hidden" onclick="downloadImage()" id="downloadBtn">Download Resized Image</button>
                 </div>
             </div>
 
@@ -410,7 +410,6 @@
         let currentImage = null;
         let currentFilename = null;
         let resizedImageData = null;
-        let savedFilename = null;
 
         // File input handler
         document.getElementById('fileInput').addEventListener('change', function (e) {
@@ -421,7 +420,7 @@
 
         // Drag and drop handlers
         const uploadArea = document.getElementById('uploadArea');
-        
+
         uploadArea.addEventListener('dragover', function (e) {
             e.preventDefault();
             uploadArea.classList.add('dragover');
@@ -567,7 +566,6 @@
             document.getElementById('originalSection').classList.remove('hidden');
             document.getElementById('controlsSection').classList.remove('hidden');
 
-            // Hide resized section
             document.getElementById('resizedSection').classList.add('hidden');
         }
 
@@ -623,11 +621,8 @@
                 });
         }
 
-        // ...existing code...
         function displayResizedImage(data) {
             resizedImageData = data.resized_image;
-
-            // Do NOT remove or hide the controls or original image section
 
             // Show the resized image
             const resizedImage = document.getElementById('resizedImage');
@@ -637,58 +632,23 @@
             resizedInfo.textContent = `${data.method}: ${data.new_size}`;
 
             document.getElementById('resizedSection').classList.remove('hidden');
+            document.getElementById('downloadBtn').classList.remove('hidden');
+
         }
-        // ...existing code...
-        function saveImage() {
-            if (!resizedImageData) {
-                showMessage('No resized image to save');
-                return;
-            }
-
-            const newWidth = document.getElementById('newWidth').value;
-            const newHeight = document.getElementById('newHeight').value;
-            const method = document.getElementById('method').value;
-
-            const requestData = {
-                image: resizedImageData,
-                width: newWidth,
-                height: newHeight,
-                method: method
-            };
-
-            showLoading(true);
-
-            fetch('/save', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestData)
-            })
-                .then(response => response.json())
-                .then(data => {
-                    showLoading(false);
-                    if (data.success) {
-                        savedFilename = data.filename;
-                        document.getElementById('downloadBtn').classList.remove('hidden');
-                        showMessage(`Image saved as ${data.filename}`, 'success');
-                    } else {
-                        showMessage(data.error || 'Save failed');
-                    }
-                })
-                .catch(error => {
-                    showLoading(false);
-                    showMessage('Save failed: ' + error.message);
-                });
-        }
+       
 
         function downloadImage() {
-            if (!savedFilename) {
-                showMessage('No saved image to download');
+            if (!resizedImageData) {
+                showMessage('No image to download');
                 return;
             }
 
-            window.open(`/download/${savedFilename}`, '_blank');
+            const link = document.createElement('a');
+            link.href = resizedImageData;
+            link.download = 'resized_image.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         function showLoading(show) {

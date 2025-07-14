@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -45,13 +46,22 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
             animation: pulse 3s ease-in-out infinite;
         }
 
         @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 0.8; }
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
         }
 
         .header h1 {
@@ -302,7 +312,7 @@
 
         .result-item:hover {
             transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
         }
 
         .result-item h4 {
@@ -361,8 +371,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .message {
@@ -374,8 +389,15 @@
         }
 
         @keyframes slideIn {
-            from { transform: translateX(-100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
 
         .message.error {
@@ -412,30 +434,80 @@
         }
 
         @keyframes loading {
-            0% { width: 0%; }
-            50% { width: 100%; }
-            100% { width: 0%; }
+            0% {
+                width: 0%;
+            }
+
+            50% {
+                width: 100%;
+            }
+
+            100% {
+                width: 0%;
+            }
         }
 
         @media (max-width: 768px) {
             .upload-section {
                 grid-template-columns: 1fr;
             }
-            
+
             .result-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             .header h1 {
                 font-size: 2em;
             }
         }
+
+        /* Add this to your existing CSS */
+        .metrics-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border-radius: 15px;
+            border: 2px solid #ffeaa7;
+        }
+
+        .metrics-section h4 {
+            color: #856404;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .metrics-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .metric-label {
+            color: #856404;
+        }
+
+        .metric-value {
+            color: #533f03;
+            font-family: monospace;
+            font-size: 1.1em;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎯 Image Registration Tool</h1>
+            <h1>Image Registration Tool</h1>
             <p>Align and register images with advanced computer vision algorithms</p>
         </div>
 
@@ -444,10 +516,11 @@
             <div class="upload-section">
                 <!-- Reference Image -->
                 <div class="upload-card">
-                    <h3>📋 Reference Image</h3>
+                    <h3>Reference Image</h3>
                     <div class="upload-area" id="refUploadArea">
-                        <p>📁 Drop your reference image here or click to browse</p>
-                        <button class="upload-btn" type="button" onclick="triggerFileInput('refFileInput')">Choose Reference Image</button>
+                        <p>Drop your reference image here or click to browse</p>
+                        <button class="upload-btn" type="button" onclick="triggerFileInput('refFileInput')">Choose
+                            Reference Image</button>
                         <input type="file" id="refFileInput" accept="image/*" style="display: none;">
                     </div>
                     <div class="image-preview hidden" id="refImagePreview">
@@ -458,10 +531,11 @@
 
                 <!-- Moving Image -->
                 <div class="upload-card">
-                    <h3>🔄 Moving Image</h3>
+                    <h3>Moving Image</h3>
                     <div class="upload-area" id="movUploadArea">
-                        <p>📁 Drop your moving image here or click to browse</p>
-                        <button class="upload-btn" type="button" onclick="triggerFileInput('movFileInput')">Choose Moving Image</button>
+                        <p>Drop your moving image here or click to browse</p>
+                        <button class="upload-btn" type="button" onclick="triggerFileInput('movFileInput')">Choose
+                            Moving Image</button>
                         <input type="file" id="movFileInput" accept="image/*" style="display: none;">
                     </div>
                     <div class="image-preview hidden" id="movImagePreview">
@@ -470,6 +544,10 @@
                     </div>
                 </div>
             </div>
+
+            <!-- <div>
+                <p>Upload the images</p>
+            </div> -->
 
             <!-- Controls Section -->
             <div class="controls-section" id="controlsSection">
@@ -482,7 +560,7 @@
                     </select>
                 </div>
                 <button class="register-btn" id="registerBtn" onclick="registerImages()" disabled>
-                    🚀 Start Registration Process
+                    Start Registration Process
                 </button>
             </div>
 
@@ -497,24 +575,31 @@
 
             <!-- Result Section -->
             <div class="result-section hidden" id="resultSection">
-                <h3>✨ Registration Results</h3>
-                
+                <h3>Registration Results</h3>
+
                 <!-- Input Images Display -->
                 <div class="result-grid">
                     <div class="result-item">
-                        <h4>📋 Reference Image</h4>
+                        <h4>Reference Image</h4>
                         <img id="resultRefImage" alt="Reference Image">
                     </div>
                     <div class="result-item">
-                        <h4>🔄 Moving Image</h4>
+                        <h4>Moving Image</h4>
                         <img id="resultMovImage" alt="Moving Image">
                     </div>
                 </div>
 
                 <!-- Final Result -->
                 <div class="final-result">
-                    <h4>🎯 Registered Image (Final Result)</h4>
+                    <h4>Registered Image (Final Result)</h4>
                     <img id="resultImage" alt="Registered Image">
+                </div>
+                <!-- Add this inside the result-section div, after the final-result div -->
+                <div class="metrics-section">
+                    <h4>📊 Evaluation Metrics</h4>
+                    <div id="metricsDisplay" class="metrics-display">
+                        <!-- Metrics will be populated here -->
+                    </div>
                 </div>
             </div>
 
@@ -530,20 +615,20 @@
         let movImageFile = null;
 
         // Initialize event listeners
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             setupEventListeners();
             console.log('Image Registration Tool initialized successfully!');
         });
 
         function setupEventListeners() {
             // File input change events
-            document.getElementById('refFileInput').addEventListener('change', function(e) {
+            document.getElementById('refFileInput').addEventListener('change', function (e) {
                 if (e.target.files.length > 0) {
                     loadImage(e.target.files[0], 'ref');
                 }
             });
 
-            document.getElementById('movFileInput').addEventListener('change', function(e) {
+            document.getElementById('movFileInput').addEventListener('change', function (e) {
                 if (e.target.files.length > 0) {
                     loadImage(e.target.files[0], 'mov');
                 }
@@ -558,20 +643,20 @@
             const uploadArea = document.getElementById(uploadAreaId);
             const fileInput = document.getElementById(fileInputId);
 
-            uploadArea.addEventListener('dragover', function(e) {
+            uploadArea.addEventListener('dragover', function (e) {
                 e.preventDefault();
                 uploadArea.classList.add('dragover');
             });
 
-            uploadArea.addEventListener('dragleave', function(e) {
+            uploadArea.addEventListener('dragleave', function (e) {
                 e.preventDefault();
                 uploadArea.classList.remove('dragover');
             });
 
-            uploadArea.addEventListener('drop', function(e) {
+            uploadArea.addEventListener('drop', function (e) {
                 e.preventDefault();
                 uploadArea.classList.remove('dragover');
-                
+
                 const files = e.dataTransfer.files;
                 if (files.length > 0 && files[0].type.startsWith('image/')) {
                     const type = fileInputId.includes('ref') ? 'ref' : 'mov';
@@ -587,43 +672,43 @@
 
         function loadImage(file, type) {
             console.log(`Loading ${type} image:`, file.name, file.type, file.size);
-            
+
             // Check if it's a supported image format
             const supportedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
             const unsupportedFormats = ['image/x-portable-pixmap', 'image/x-portable-graymap', 'image/x-portable-bitmap'];
-            
+
             if (unsupportedFormats.includes(file.type)) {
                 showMessage(`PPM/PGM/PBM files are not supported for display in browsers. Please convert to JPG, PNG, or another standard format.`, 'error');
                 return;
             }
-            
+
             if (!file.type.startsWith('image/')) {
                 showMessage('Please select a valid image file', 'error');
                 return;
             }
-            
+
             if (!supportedFormats.includes(file.type) && file.type.startsWith('image/')) {
                 showMessage(`Image format ${file.type} may not be supported. Recommended formats: JPG, PNG, GIF, WebP, BMP`, 'error');
                 // Continue anyway, might still work
             }
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 const imageData = e.target.result;
                 console.log(`${type} image data loaded, length:`, imageData.length);
-                
+
                 if (type === 'ref') {
                     refImageData = imageData;
                     refImageFile = file;
-                    
+
                     const refImage = document.getElementById('refImage');
-                    refImage.onload = function() {
+                    refImage.onload = function () {
                         console.log('Reference image displayed successfully');
                         document.getElementById('refImagePreview').classList.remove('hidden');
                         showMessage(`Reference image "${file.name}" loaded successfully!`, 'success');
                         updateControlsState();
                     };
-                    refImage.onerror = function() {
+                    refImage.onerror = function () {
                         console.error('Error displaying reference image');
                         showMessage(`Error displaying reference image. Format ${file.type} may not be supported by your browser.`, 'error');
                     };
@@ -631,38 +716,38 @@
                 } else {
                     movImageData = imageData;
                     movImageFile = file;
-                    
+
                     const movImage = document.getElementById('movImage');
-                    movImage.onload = function() {
+                    movImage.onload = function () {
                         console.log('Moving image displayed successfully');
                         document.getElementById('movImagePreview').classList.remove('hidden');
                         showMessage(`Moving image "${file.name}" loaded successfully!`, 'success');
                         updateControlsState();
                     };
-                    movImage.onerror = function() {
+                    movImage.onerror = function () {
                         console.error('Error displaying moving image');
                         showMessage(`Error displaying moving image. Format ${file.type} may not be supported by your browser.`, 'error');
                     };
                     movImage.src = imageData;
                 }
             };
-            
-            reader.onerror = function() {
+
+            reader.onerror = function () {
                 console.error('Error reading image file');
                 showMessage('Error reading image file', 'error');
             };
-            
+
             reader.readAsDataURL(file);
         }
 
         function updateControlsState() {
             const controlsSection = document.getElementById('controlsSection');
             const registerBtn = document.getElementById('registerBtn');
-            
+
             if (refImageData && movImageData) {
                 controlsSection.classList.add('active');
                 registerBtn.disabled = false;
-                registerBtn.textContent = '🚀 Start Registration Process';
+                registerBtn.textContent = 'Start Registration Process';
             } else {
                 controlsSection.classList.remove('active');
                 registerBtn.disabled = true;
@@ -677,11 +762,11 @@
             }
 
             const method = document.getElementById('method').value;
-            
+
             // Show loading state
             showLoading(true);
             hideResult();
-            
+
             // Prepare request data - Fixed to match backend API
             const requestData = {
                 ref: refImageData,
@@ -697,31 +782,34 @@
                 },
                 body: JSON.stringify(requestData)
             })
-            .then(response => response.json())
-            .then(data => {
-                showLoading(false);
-                if (data.success) {
-                    displayResult(data);
-                    showMessage(`Image registration completed successfully using ${method.toUpperCase()}!`, 'success');
-                } else {
-                    showMessage(data.error || 'Registration failed', 'error');
-                }
-            })
-            .catch(error => {
-                showLoading(false);
-                console.error('Registration error:', error);
-                showMessage(`Registration failed: ${error.message}`, 'error');
-            });
+                .then(response => response.json())
+                .then(data => {
+                    showLoading(false);
+                    if (data.success) {
+                        displayResult(data);
+                        showMessage(`Image registration completed successfully using ${method.toUpperCase()}!`, 'success');
+                    } else {
+                        showMessage(data.error || 'Registration failed', 'error');
+                    }
+                })
+                .catch(error => {
+                    showLoading(false);
+                    console.error('Registration error:', error);
+                    showMessage(`Registration failed: ${error.message}`, 'error');
+                });
         }
 
         function displayResult(data) {
             // Display original images in result section
             document.getElementById('resultRefImage').src = refImageData;
             document.getElementById('resultMovImage').src = movImageData;
-            
+
             // Display registered result - Fixed to use correct property name
             document.getElementById('resultImage').src = data.result;
-            
+
+            if (data.metrics) {
+                displayMetrics(data.metrics);
+            }
             // Show result section with animation
             const resultSection = document.getElementById('resultSection');
             resultSection.classList.remove('hidden');
@@ -752,9 +840,9 @@
             const messageElement = document.createElement('div');
             messageElement.className = `message ${type}`;
             messageElement.textContent = message;
-            
+
             messagesDiv.appendChild(messageElement);
-            
+
             // Auto-remove message after 5 seconds
             setTimeout(() => {
                 if (messageElement.parentNode) {
@@ -762,6 +850,25 @@
                 }
             }, 5000);
         }
+
+        function displayMetrics(metrics) {
+            const metricsDiv = document.getElementById('metricsDisplay');
+            metricsDiv.innerHTML = `
+        <div class="metric-item">
+            <span class="metric-label">MSE:</span>
+            <span class="metric-value">${metrics.mse.toFixed(2)}</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-label">PSNR:</span>
+            <span class="metric-value">${metrics.psnr.toFixed(2)} dB</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-label">SSIM:</span>
+            <span class="metric-value">${metrics.ssim.toFixed(4)}</span>
+        </div>
+    `;
+        }
     </script>
 </body>
+
 </html>

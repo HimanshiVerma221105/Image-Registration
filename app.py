@@ -491,8 +491,11 @@ def calculate_psnr(img1, img2):
         return float('inf')
     return 20 * np.log10(255.0 / np.sqrt(mse))
 
+import cv2
+import numpy as np
+
 def calculate_ssim(img1, img2):
-    """Calculate Structural Similarity Index"""
+    """Calculate Structural Similarity Index (SSIM) between two images"""
     # Convert to grayscale if needed
     if len(img1.shape) == 3:
         img1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
@@ -500,23 +503,32 @@ def calculate_ssim(img1, img2):
     else:
         img1_gray, img2_gray = img1, img2
     
-    # Simple SSIM implementation
+    # Convert to float32
+    img1_gray = img1_gray.astype(np.float32)
+    img2_gray = img2_gray.astype(np.float32)
+    
+    # Gaussian blur
     mu1 = cv2.GaussianBlur(img1_gray, (11, 11), 1.5)
     mu2 = cv2.GaussianBlur(img2_gray, (11, 11), 1.5)
     
     mu1_sq = mu1 ** 2
     mu2_sq = mu2 ** 2
     mu1_mu2 = mu1 * mu2
-    
+
     sigma1_sq = cv2.GaussianBlur(img1_gray ** 2, (11, 11), 1.5) - mu1_sq
     sigma2_sq = cv2.GaussianBlur(img2_gray ** 2, (11, 11), 1.5) - mu2_sq
     sigma12 = cv2.GaussianBlur(img1_gray * img2_gray, (11, 11), 1.5) - mu1_mu2
-    
+
+    # Constants for stability
     c1 = (0.01 * 255) ** 2
     c2 = (0.03 * 255) ** 2
+
+    # SSIM map
+    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / \
+               ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
     
-    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
     return np.mean(ssim_map)
+
 
 # ===== ROUTES =====
 
@@ -680,7 +692,6 @@ def register_image():
 @app.route('/stitch')
 def stitch_page():
     return render_template('stitch.html')
-
 
 @app.route('/save', methods=['POST'])
 def save_image():
